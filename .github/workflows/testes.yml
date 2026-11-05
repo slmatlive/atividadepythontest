@@ -5,16 +5,17 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    - cron: '17 */6 * * *'
+    # Menor intervalo permitido pelo agendamento do GitHub Actions.
+    - cron: '*/5 * * * *'
 
 permissions:
   contents: read
 
 jobs:
   testes:
-    name: Executar testes com Pytest
+    name: Testar a cada 30 segundos (10 rodadas)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 9
 
     steps:
       - name: Baixar codigo
@@ -34,13 +35,27 @@ jobs:
       - name: Validar sintaxe
         run: python -m compileall -q app.py tests
 
-      - name: Executar testes
-        run: python -m pytest -v --junitxml=relatorios/testes.xml
+      - name: Executar testes a cada 30 segundos
+        shell: bash
+        run: |
+          mkdir -p relatorios
+          falhou=0
+          for rodada in $(seq 1 10); do
+            echo "::group::Rodada $rodada de 10"
+            echo "Iniciada em $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            python -m pytest -v --junitxml="relatorios/testes-${rodada}.xml" || falhou=1
+            echo "::endgroup::"
 
-      - name: Guardar relatorio
+            if [ "$rodada" -lt 10 ]; then
+              sleep 30
+            fi
+          done
+          exit "$falhou"
+
+      - name: Guardar relatorios
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: resultado-dos-testes
-          path: relatorios/testes.xml
+          name: resultados-dos-testes
+          path: relatorios/*.xml
           if-no-files-found: ignore
